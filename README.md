@@ -5,7 +5,7 @@ dirspace is a utility which recursively calculates space by directory
 with output similar to the following:
 
 ```bash
-sh$ dirspace /System/Library --maxdepth 3
+sh$ dirspace --maxdepth=3 /System/Library
 /System/Library/Accessibility,2309418,2meg
 /System/Library/Accounts,4335924,4meg
 /System/Library/Address Book Plug-Ins,3654925,3meg
