@@ -5,29 +5,29 @@ OBJS := ${SRC:.c=.o}
 CFLAGS := 
 LDFLAGS := 
 
-ifeq ($(FAST),1)
-  CFLAGS += -O3 -DNDEBUG
-else
+ifeq ($(DEBUG),1)
   CFLAGS += -g -O0
+else
+  CFLAGS += -O3 -DNDEBUG
 endif
 
-CFLAGS += -Werror -Wall
+CFLAGS += -std=c11
+
+-include localvars.mk
 
 all: $(OUT)
 
-%.o: %.c
+%.o: %.c helptext
 	$(CC) -c $< $(CFLAGS)
 
 $(OUT): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-.PHONY: test
-test: $(OUT)
-	./$(OUT) ..
-
-.PHONY: test
-retest: clean test
+helptext: info.txt addhelp.py
+	./addhelp.py
 
 .PHONY: clean
 clean:
 	rm -f $(OUT) $(OBJS)
+
+-include localrules.mk

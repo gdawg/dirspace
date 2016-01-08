@@ -1,0 +1,4 @@
+A tool for visualizing directory sizes.
+
+-s  Use Summary output format designed for interactive use rather than recording precise information.
+-x  Prevent descending into directories that have a device number different than that of the file from which the descent began.

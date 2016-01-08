@@ -1,19 +1,15 @@
 #!/bin/bash
 
-## Uses the "dirspace" command in conjunction with sort.
+## Sort the output from dirspace by size
+## usage: dirspace /home/* |bigspace.sh |head -10
 ##
 
-usage(){
-	grep '^##' $0 |cut -b4-
-	echo "usage: $(basename $0) DIR"
-	exit 1
-}
+case $1 in
+	-h|--help )
+		grep '^##' $0 |cut -b4-
+		exit 1
+		;;
+esac
 
-onError() {
-	echo "$@" >&2
-	exit 1
-}
-[[ -z $1 ]] && usage
-
-dirspace "$@" |sort -t, -k2 -g -r
+cat "$@" |sort -t, -k2 -g -r
 

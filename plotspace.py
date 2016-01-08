@@ -11,6 +11,9 @@ from os.path import relpath
    
 def read_data(path, n=10):
     """Reads top n entries, ignoring subdirs"""
+    if path == '-':
+        path = '/dev/stdin'
+
     with open(path) as fp:
         reader = csv.reader(fp)
         row = reader.next()

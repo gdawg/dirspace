@@ -35,3 +35,8 @@
 
 dirspace
 *.pyc
+*.csv
+*.plist
+
+localvars.mk
+localrules.mk
