@@ -1,17 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <assert.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <limits.h>
-#include <fts.h>
 #include <string.h>
-#include <errno.h>
+#include <stdint.h>
 #include <stdbool.h>
-#include <stdarg.h>
+#include <stddef.h>
+#include <errno.h>
+#if defined(__linux__)
+  #define __USE_BSD 1
+  #include <linux/limits.h>
+  extern char *program_invocation_short_name;
+  static const char *getprogname(void) { return program_invocation_short_name; }
+#elif defined(__APPLE__)
+  #include <limits.h>
+#endif
+#include <sys/types.h>
 #include <sys/ttydefaults.h>
+#include <sys/stat.h>
+#include <getopt.h>
+#include <assert.h>
+#include <fts.h>
+
 #define RB_COMPACT
 #include "rb.h"
 #include "humanize.h"

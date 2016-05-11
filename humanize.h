@@ -1,12 +1,12 @@
 #ifndef HUMANIZE_H
 #define HUMANIZE_H 1
 
-static const int kHumanBufLen = 16;
+#define HMNBUFLEN 16
 
 static inline char*
 human_size(size_t size)
 {
-  static char s[kHumanBufLen];
+  static char s[HMNBUFLEN];
   struct {
     const char *n; size_t sz;
   } units[] = {
@@ -22,7 +22,7 @@ human_size(size_t size)
       break;
   i--;
 
-  snprintf(s, kHumanBufLen, "%lu%s", 
+  snprintf(s, HMNBUFLEN, "%lu%s", 
           (unsigned long) (size / units[i].sz), 
           units[i].n);
   return s;
