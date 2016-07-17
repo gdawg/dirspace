@@ -30,11 +30,19 @@
 #define STREQ(S1,S2) (strcmp(S1,S2) == 0)
 
 #define GET_OPTS \
-  X(summary, no_argument, 's', int, 0, 1) \
-  X(maxdepth, required_argument, 'd', int, 10, atoi(optarg)) \
-  X(nofollow, no_argument, 'x', int, 0, 1) \
-  X(exclusive, no_argument, 'e', int, 0, 1) \
-  X(showall, required_argument, 'a', int, 0, 1)
+  X(summary, no_argument, 's', int, 0, 1, \
+    "Use Summary output format designed for interactive " \
+    "use rather than recording precise information.") \
+  X(maxdepth, required_argument, 'd', int, 10, atoi(optarg), \
+    "Descend at most n directory levels below the command line argument") \
+  X(nofollow, no_argument, 'x', int, 0, 1, \
+    "Prevent descending into directories that have a device number " \
+    "different than that of the file from which the descent began.") \
+  X(exclusive, no_argument, 'e', int, 0, 1, \
+    "Use exclusive output size for csv output. " \
+    "Has no effect in summary mode.") \
+  X(showall, required_argument, 'a', int, 0, 1, \
+    "Show full list of directories in summary mode.")
 
 #include "xopts.h"
 
@@ -224,16 +232,8 @@ main(int argc, char *argv[])
   }
   printf(
     "usage: %s [options] dir [dir-2 .. dir-n]\n"
+    "A tool for visualizing directory sizes.\n"
     "options:\n", getprogname());
   dump_options();
-  puts(
-    "\n"
-    // BEGIN HELP TEXT
-    "A tool for visualizing directory sizes.\n"
-    "\n"
-    "-s  Use Summary output format designed for interactive use rather than recording precise information.\n"
-    "-x  Prevent descending into directories that have a device number different than that of the file from which the descent began.\n"
-    // END HELP TEXT
-  );
   return opterr ? opterr : EXIT_FAILURE;
 }

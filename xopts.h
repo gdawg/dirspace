@@ -1,13 +1,15 @@
-/* getopts generation code using xmacros */
+/* getopts generation code using xmacros 
+    N, REQ, F, T, DFLT, FUNC, DESC
+*/
 #ifndef XOPTS_H
 #define XOPTS_H 1
 #include <getopt.h>
 
-#define X(LONG, REQARG, SHORT, T, DFLT, PARSE) T LONG;
+#define X(N, REQ, F, T, DFLT, FUNC, DESC) T N;
 struct {
   GET_OPTS
 #undef X
-#define X(LONG, REQARG, SHORT, T, DFLT, PARSE) DFLT,
+#define X(N, REQ, F, T, DFLT, FUNC, DESC) DFLT,
 } options = {
   GET_OPTS
 };
@@ -20,9 +22,9 @@ gen_optstr()
   int i = 0;
   s[i++] = ':';
 
-#define X(LONG, REQARG, SHORT, T, DFLT, PARSE) \
-  s[i++] = SHORT; \
-  if (REQARG == required_argument) s[i++] = ':';
+#define X(N, REQ, F, T, DFLT, FUNC, DESC) \
+  s[i++] = F; \
+  if (REQ == required_argument) s[i++] = ':';
     GET_OPTS
 #undef X
 
@@ -35,7 +37,7 @@ parse_options(int argc, char *argv[])
 {
   int c;
   
-#define X(LONG, REQARG, SHORT, T, DFLT, PARSE) {#LONG, REQARG, NULL, SHORT},
+#define X(N, REQ, F, T, DFLT, FUNC, DESC) {#N, REQ, NULL, F},
   static struct option longopts[] = {
     GET_OPTS
     {NULL, 0, NULL, 0}
@@ -44,8 +46,8 @@ parse_options(int argc, char *argv[])
 
   while ((c = getopt_long(argc, argv, gen_optstr(), longopts, NULL)) != -1){
   switch(c){
-  #define X(LONG, REQARG, SHORT, T, DFLT, PARSE) \
-    case SHORT: options.LONG = PARSE; break;
+  #define X(N, REQ, F, T, DFLT, FUNC, DESC) \
+    case F: options.N = FUNC; break;
       GET_OPTS
     default: opterr = 1; break;
   }}
@@ -55,7 +57,8 @@ parse_options(int argc, char *argv[])
 static void
 dump_options()
 {
-#define X(LONG, REQARG, SHORT, T, DFLT, PARSE) printf("  -%c            --%-12s\n", SHORT, #LONG);
+#define X(N, REQ, F, T, DFLT, FUNC, DESC) \
+  printf("  -%c  --%s  %s\n", F, #N, DESC);
     GET_OPTS
 #undef X  
 }
