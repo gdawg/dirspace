@@ -8,44 +8,48 @@ from matplotlib import pyplot as plt
 
 import csv
 from os.path import relpath
-   
-def read_data(path, n=10):
-    """Reads top n entries, ignoring subdirs"""
-    if path == '-':
-        path = '/dev/stdin'
+from heapq import heappush, heappop, nlargest
 
-    with open(path) as fp:
+def heappop_depth(heap, depth):
+    found = []
+    while len(heap) > 0 and heap[0][0] == depth:
+        _,rec = heappop(heap)
+        found.append(rec)
+    return found
+
+
+def nlargest_paths(csvpath, n=10):
+    """Parse csv with directory sizes and return top n by size.
+       Expected csv format is [path,size,ignored...]"""
+
+    if csvpath == '-':
+        csvpath = '/dev/stdin'
+
+    sep = os.path.sep
+
+    # load into sorted heap by path depth
+    heap = []
+    with open(csvpath) as fp:
         reader = csv.reader(fp)
-        row = reader.next()
-        root = row[0]
 
-        names = []
-        sizes = []
-        parents = []
+        for path,sizestr,_ in reader:
+            size = int(sizestr)
+            depth = len(path.split(sep))
+            rec = (size, path)
+            heappush(heap, (depth, rec))
 
-        for row in reader:
-            p = row[0]
-            keep = True
-            for parent in parents:
-                if p.startswith(parent):
-                    keep = False
-                    break
+    # pop the root path - all children will be deeper in the tree
+    depth,root = heappop(heap)
+    top = [root]
 
-            if not keep:
-                continue
+    # successively go deeper until we find enough paths to return
+    while len(top) < n:
+        unsorted_sp = heappop_depth(heap, depth + 1)
+        subpaths = nlargest(n - len(top), unsorted_sp)
+        top += subpaths
 
-            names.append(relpath(row[0], root))
-            sizes.append(int(row[1]))
-            parents.append(p)
+    return top
 
-            if len(names) > n:
-                other = 0
-                for r in reader:
-                    other += int(row[1])
-                names.append('other')
-                sizes.append(other)
-
-    return (root,names,np.array(sizes))
 
 def dumpdata(root, names, sizes):
     head = 'Largest dirs under {}'.format(root)
@@ -57,11 +61,20 @@ def dumpdata(root, names, sizes):
     for row in zip(*data):
         print(' | '.join([getattr(v, j)(w) for v,w,j in zip(row,widths,just)]))
 
-
 def main():
     args = parse_args()
-    root,names,sizes = read_data(args.csvpath, n=args.number)
-    dumpdata(root, names, sizes)
+
+    # find top paths by size
+    toppaths = nlargest_paths(args.csvpath, n=args.number)
+
+    # pop the root so we don't graph 100%
+    root = toppaths[0]
+    rootpath = root[1]
+    paths = toppaths[1:]
+    sizes = np.array([p[0] for p in paths])
+    names = [p[1][len(rootpath) + 1:] for p in paths]
+
+    dumpdata(rootpath, names, sizes)
 
     plt.xkcd()
 
