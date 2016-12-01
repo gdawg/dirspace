@@ -11,7 +11,7 @@ else
   CFLAGS += -O3 -DNDEBUG
 endif
 
-CFLAGS += -std=c11
+CFLAGS += -std=gnu11
 
 -include localvars.mk
 
