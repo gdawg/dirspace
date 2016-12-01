@@ -129,7 +129,7 @@ class PolarSizeChart(object):
             minsize = kwargs['minsize']
             del(kwargs['minsize'])
         else:
-            minsize = -1
+            minsize = None
         self.minsize = minsize
 
         self.ax = plt.subplot(projection='polar', 
@@ -154,7 +154,7 @@ class PolarSizeChart(object):
         return b,h
 
     def should_plot(self, node, width):
-        if self.minsize > 0:
+        if self.minsize != None:
             return node.n > self.minsize
         return width > self.min_plotted
 
@@ -167,6 +167,8 @@ class PolarSizeChart(object):
         
         sizes = np.array([c.n for c in segments], dtype=np.float)
         sizesum = sizes.sum()
+        if sizesum == 0:
+            return [[], [], []]
 
         # scale the child sizes so the range matches left <-> right
         span = right - left
@@ -248,8 +250,8 @@ def add_node_to_chart(chart, node, left, right, depth=0):
             right=theta + width,
             depth=depth+1)
 
-def polarchart(root, minsize=-1, *args, **kwargs):
-    chart = PolarSizeChart(minsize=minsize, *args, **kwargs)
+def polarchart(root, *args, **kwargs):
+    chart = PolarSizeChart(*args, **kwargs)
 
     left,right = (0.0, 2.0 * np.pi)
     add_node_to_chart(chart, root, left, right)
@@ -266,9 +268,40 @@ def findtop(root):
         node = node.children.values()[0]
     return node
 
+class ParseSizeAction(argparse.Action):
+    """Parser for size arguments which takes suffixes for common byte sizes"""
+
+    smap = {
+        'tb': 1024 * 1024 * 1024 * 1024,
+        't': 1024 * 1024 * 1024 * 1024,
+        'gb': 1024 * 1024 * 1024,
+        'g': 1024 * 1024 * 1024,
+        'mb': 1024 * 1024,
+        'm': 1024 * 1024,
+        'kb': 1024,
+        'k': 1024,
+    }
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        numstr = values
+        suffix = ''
+        for x in xrange(len(values)):
+            if values[x] not in '0123456789.':
+                numstr,suffix = values[:x],values[x:]
+                break
+
+        num = int(float(numstr) * self.multiplier(suffix.lower()))
+        setattr(namespace, self.dest, num)
+
+    def multiplier(self, suffix):
+        if suffix in self.smap:
+            return self.smap[suffix]
+        return 1
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('csv')
+    parser.add_argument('--minsize', action=ParseSizeAction)
     args = parser.parse_args()
 
     if args.csv == '-':
@@ -278,7 +311,7 @@ def main():
             root = read_data(fp)
 
     node = findtop(root)
-    polarchart(node, title='Size by Directory')
+    polarchart(node, title='Size by Directory', minsize=args.minsize)
     # dumptree(root)
 
 if __name__ == '__main__':
