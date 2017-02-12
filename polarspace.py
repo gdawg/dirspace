@@ -219,7 +219,6 @@ class PolarSizeChart(object):
                 verticalalignment='center',
                 fontsize=self.fontsize,
                 color=textcolor)
-            # label.set_color(textcolor)
 
         # return some info on what we drew - useful for linking deeper
         return [segments, theta, widths]
