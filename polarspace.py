@@ -14,6 +14,8 @@ import numpy as np
 import re
 import argparse
 import sys
+import fnmatch
+from itertools import count, izip
 
 def genwidth(theta, left, right):
     """Generate widths for tightly packed bars ranging from left to right"""
@@ -71,9 +73,12 @@ def read_data(it):
     """Read sizes from csv into a Node graph"""
     root = Node('', n=0) # everything stems from here
 
-    for line in it:
-        fields = line[:-1].split(',')
-        nodepath,nstr = fields[:2]
+    for lineno,line in izip(count(), it):
+        try:
+            fields = line[:-1].split(',')
+            nodepath,nstr = fields[:2]
+        except ValueError, e:
+            sys.stderr.write('line {}: {}\n'.format(lineno, e))
         n = int(nstr)
 
         # walk the tree to find or create any intermediate nodes
@@ -119,18 +124,10 @@ def recalculate(node, minsize):
 class PolarSizeChart(object):
     """Polar chart displaying relative sizes"""
     def __init__(self, *args, **kwargs):
-        if 'title' in kwargs:
-            title = kwargs['title']
-            del(kwargs['title'])
-        else:
-            title = 'Size by node'
+        title = self.getoptarg(kwargs, 'title', 'Size by directory')
 
-        if 'minsize' in kwargs:
-            minsize = kwargs['minsize']
-            del(kwargs['minsize'])
-        else:
-            minsize = None
-        self.minsize = minsize
+        self.minsize = self.getoptarg(kwargs, 'minsize', None)
+        self.fnmatch = self.getoptarg(kwargs, 'fnmatch', None)
 
         self.ax = plt.subplot(projection='polar', 
                               *args, **kwargs)
@@ -143,6 +140,13 @@ class PolarSizeChart(object):
         self.cmap = mplcm.gray
         self.color_by_size = True
 
+    def getoptarg(self, kwargs, arg, default):
+        if arg in kwargs:
+            value = kwargs[arg]
+            del(kwargs[arg])
+            return value
+        return default
+
 
     def getbase(self, level):
         maxheight = 10.0
@@ -154,8 +158,15 @@ class PolarSizeChart(object):
         return b,h
 
     def should_plot(self, node, width):
-        if self.minsize != None:
-            return node.n > self.minsize
+        if self.minsize != None and node.n < self.minsize:
+            return False
+        if self.fnmatch != None and not fnmatch.fnmatch(node.name, self.fnmatch):
+            return False
+
+        if self.minsize or self.fnmatch:
+            return True
+
+        # if no matching options at all were set then fallback on default width
         return width > self.min_plotted
 
     def plot_node(self, node, level, left, right):
@@ -301,7 +312,10 @@ class ParseSizeAction(argparse.Action):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('csv')
-    parser.add_argument('--minsize', action=ParseSizeAction)
+    parser.add_argument('--title', default='Size by Directory')
+    parser.add_argument('--minsize', 
+        help='draw directories larger than the specified value. accepts units T,G,M,K',
+        action=ParseSizeAction)
     args = parser.parse_args()
 
     if args.csv == '-':
@@ -311,7 +325,9 @@ def main():
             root = read_data(fp)
 
     node = findtop(root)
-    polarchart(node, title='Size by Directory', minsize=args.minsize)
+    kwargs = vars(args)
+    del(kwargs['csv'])
+    polarchart(node, **kwargs)
     # dumptree(root)
 
 if __name__ == '__main__':
