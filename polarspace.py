@@ -47,17 +47,21 @@ class Node(object):
     def update(self, n):
         self.n = n
 
-    def remove(self, child):
-        """Remove child node. This adjusts sizes recorded for parent
-        nodes automatically."""
+    def remove(self, child, adjust_sizes=False):
+        """Remove child node. If requested this adjusts sizes 
+        recorded for parent nodes automatically."""
         assert(child in self.children.values())
 
-        node = self
-        while node != None:
-            node.n -= child.n
-            node = node.parent
+        if adjust_sizes:
+            node = self
+            while node != None:
+                node.n -= child.n
+                node = node.parent
 
         del(self.children[child.name])
+
+    def calculate_size(self):
+        self.n = sum([c.n for c in self.children.values()])
 
     def describesize(self):
         sz = self.n
@@ -102,7 +106,7 @@ def read_data(it):
         parent = root
         for node in subnodes(nodepath):
             if not node in parent.children:
-                parent.addchild(Node(node, 0))
+                parent.addchild(Node(node, -1))
             parent = parent.children[node]
 
         if nodepath in parent.children:
@@ -122,20 +126,6 @@ def dumptree(node, depth=0):
     for c in node.children.values():
         dumptree(c, depth=depth+1)
 
-def recalculate(node, minsize):
-    """Recalculate totals after filtering"""
-    children = node.children.values()
-    if len(children) > 0:
-        node.n = 0
-        newchildren = {}
-        for c in children:
-            recalculate(c, minsize)
-            node.n += c.n
-            if c.n >= minsize:
-                newchildren[c.name] = c
-        node.children = newchildren
-    if node.n < minsize:
-        node.n = 0
 
 class PolarSizeChart(object):
     """Polar chart displaying relative sizes"""
@@ -215,22 +205,61 @@ class PolarSizeChart(object):
                 bar.set_color(self.cmap(hpos))
 
             fcolor = np.array(bar.get_facecolor())
-            ecolor = fcolor * [0.5, 0.5, 0.5, 1.0]
+            ecolor = self.darken_color(fcolor)
             bar.set_edgecolor(ecolor)
 
             barpos = bar.get_xy() # get the center of this chunk
-            cx = barpos[0] + 0.5 * w
-            cy = barpos[1] + 0.5 * height
+            cx,cy = self.get_text_position(barpos, w, height)
 
             # add a text nodename label
             bartext = '{}\n{}'.format(child.leaf, child.describesize())
-            cy -= 0.2 * self.fontsize # acsize for newline
-            self.ax.text(cx, cy, bartext, 
+            textcolor = self.textcolor(fcolor)
+            label = self.ax.text(cx, cy, bartext, 
                 horizontalalignment='center',
-                fontsize=self.fontsize)
+                verticalalignment='center',
+                fontsize=self.fontsize,
+                color=textcolor)
+            # label.set_color(textcolor)
 
         # return some info on what we drew - useful for linking deeper
         return [segments, theta, widths]
+
+    def get_text_position(self, barpos, width, height):
+        """Adjust text position for labels"""
+        cx = barpos[0] + 0.5 * width
+        cy = barpos[1] + 0.5 * height
+        return cx,cy
+
+    def darken_color(self, color, amt=0.25):
+        assert(amt >= 0)
+        assert(amt <= 1.0)
+        f = 1.0 - amt
+
+        return tuple([(c * f) for c in color[:3]] + [1.0])
+
+
+    def textcolor(self, color):
+        if self.is_gray(color):
+            i = color[0]
+
+            # choose a differentiable color based on intensity
+            if i > 0.25 and i < 0.75:
+                c = 0.0
+            else:
+                c = 1.0 - i
+            return (c, c, c, 1.0)
+        else:
+            return (0.0, 0.0, 0.0, 1.0)
+
+    def is_gray(self, color):
+        arr = np.array(color, dtype=np.float)
+        diffs = np.abs([arr[0] - arr[1], arr[1] - arr[2], arr[2] - arr[0]])
+        return np.sum(diffs) < 0.01
+
+
+        color = tuple([(c * 0.5) for c in color[:3]] + [1.0])
+        return color
+
 
     def show(self):
         self.ax.figure.tight_layout()
@@ -296,13 +325,15 @@ class ParseSizeAction(argparse.Action):
                 numstr,suffix = values[:x],values[x:]
                 break
 
-        num = int(float(numstr) * self.multiplier(suffix.lower()))
+        num = int(float(numstr) * self.multiplier(suffix))
         setattr(namespace, self.dest, num)
 
     def multiplier(self, suffix):
-        if suffix in self.smap:
-            return self.smap[suffix]
-        return 1
+        low = suffix.lower()
+        if low in self.smap:
+            return self.smap[low]
+        raise argparse.ArgumentError(self, 
+                'unknown suffix: {}'.format(suffix))
 
 def filter_tree(node, minsize=0, pattern=None):
     """Recursively filter a node graph to prune unwanted elements"""
@@ -312,14 +343,24 @@ def filter_tree(node, minsize=0, pattern=None):
     for child in node.children.values():
         filter_tree(child, minsize, pattern)
 
+    if node.parent == None:
+        return # don't try to remove the root node
+
     if pattern != None and len(node.children) == 0:
         # remove this node if it has a non-matching name and
         # no children. if it has children it must be kept 
         # or they'd be orphaned and lost
         if not fnmatch.fnmatch(node.name, pattern):
             node.parent.remove(node)
+            return
 
     if minsize != 0:
+        # nodes which were added to complete the path to the root
+        # but do not appear in the dataset will not have size info
+        # so we update them before compare
+        if node.n < 0:
+            node.calculate_size()
+
         # The minsize constraint is applied without respect to
         # if the node has children. If it's too small - they're too small.
         if node.n < minsize:
@@ -328,12 +369,14 @@ def filter_tree(node, minsize=0, pattern=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('csv')
-    parser.add_argument('--title', default='Size by Directory')
+    parser.add_argument('--title', default=None)
     parser.add_argument('--minsize', 
-        help='draw directories larger than the specified value. accepts units T,G,M,K',
-        action=ParseSizeAction)
+                        help="""draw directories larger than the 
+                        specified value. accepts units T,G,M,K""", 
+                        action=ParseSizeAction)
     parser.add_argument('--fnmatch', 
-        help='draw only directories with a name matching given value')
+                        help="""draw only directories 
+                        with a name matching given value""")
     args = parser.parse_args()
 
     if args.csv == '-':
@@ -342,12 +385,17 @@ def main():
         with open(args.csv) as fp:
             root = read_data(fp)
 
-    filter_tree(root, minsize=args.minsize, pattern=args.fnmatch)
+    filter_tree(root, 
+                minsize=args.minsize/1024, # node sizes are in kb
+                pattern=args.fnmatch)
 
     node = findtop(root)
     kwargs = vars(args)
     for k in ['csv', 'minsize', 'fnmatch']:
         del(kwargs[k])
+
+    if kwargs['title'] == None:
+        kwargs['title'] = node.name
 
     polarchart(node, **kwargs)
     # dumptree(root)
