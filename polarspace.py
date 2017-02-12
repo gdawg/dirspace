@@ -47,6 +47,18 @@ class Node(object):
     def update(self, n):
         self.n = n
 
+    def remove(self, child):
+        """Remove child node. This adjusts sizes recorded for parent
+        nodes automatically."""
+        assert(child in self.children.values())
+
+        node = self
+        while node != None:
+            node.n -= child.n
+            node = node.parent
+
+        del(self.children[child.name])
+
     def describesize(self):
         sz = self.n
         for unit in 'bkmgt':
@@ -59,6 +71,10 @@ class Node(object):
     def __repr__(self):
         return '{}[n={}, children={}]'.format(
                    self.name, self.n, len(self.children))
+
+    def __len__(self):
+        return ( 1 if len(self.children) == 0 
+                   else sum([len(c) for c in self.children.values()]) )
 
 def subnodes(name):
     """Returns each full nodename required for a node to exist
@@ -124,13 +140,9 @@ def recalculate(node, minsize):
 class PolarSizeChart(object):
     """Polar chart displaying relative sizes"""
     def __init__(self, *args, **kwargs):
-        title = self.getoptarg(kwargs, 'title', 'Size by directory')
+        title = kwargs['title'] if 'title' in kwargs else 'Size by directory'
 
-        self.minsize = self.getoptarg(kwargs, 'minsize', None)
-        self.fnmatch = self.getoptarg(kwargs, 'fnmatch', None)
-
-        self.ax = plt.subplot(projection='polar', 
-                              *args, **kwargs)
+        self.ax = plt.subplot(projection='polar', *args, **kwargs)
         self.ax.set_axis_off()
         self.ax.set_title(title)
 
@@ -139,14 +151,6 @@ class PolarSizeChart(object):
         self.min_plotted = np.pi * 0.1
         self.cmap = mplcm.gray
         self.color_by_size = True
-
-    def getoptarg(self, kwargs, arg, default):
-        if arg in kwargs:
-            value = kwargs[arg]
-            del(kwargs[arg])
-            return value
-        return default
-
 
     def getbase(self, level):
         maxheight = 10.0
@@ -158,15 +162,6 @@ class PolarSizeChart(object):
         return b,h
 
     def should_plot(self, node, width):
-        if self.minsize != None and node.n < self.minsize:
-            return False
-        if self.fnmatch != None and not fnmatch.fnmatch(node.name, self.fnmatch):
-            return False
-
-        if self.minsize or self.fnmatch:
-            return True
-
-        # if no matching options at all were set then fallback on default width
         return width > self.min_plotted
 
     def plot_node(self, node, level, left, right):
@@ -309,6 +304,27 @@ class ParseSizeAction(argparse.Action):
             return self.smap[suffix]
         return 1
 
+def filter_tree(node, minsize=0, pattern=None):
+    """Recursively filter a node graph to prune unwanted elements"""
+
+    # Apply filtering depth first so that 
+    # minsize constraints are properly applied.
+    for child in node.children.values():
+        filter_tree(child, minsize, pattern)
+
+    if pattern != None and len(node.children) == 0:
+        # remove this node if it has a non-matching name and
+        # no children. if it has children it must be kept 
+        # or they'd be orphaned and lost
+        if not fnmatch.fnmatch(node.name, pattern):
+            node.parent.remove(node)
+
+    if minsize != 0:
+        # The minsize constraint is applied without respect to
+        # if the node has children. If it's too small - they're too small.
+        if node.n < minsize:
+            node.parent.remove(node)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('csv')
@@ -316,6 +332,8 @@ def main():
     parser.add_argument('--minsize', 
         help='draw directories larger than the specified value. accepts units T,G,M,K',
         action=ParseSizeAction)
+    parser.add_argument('--fnmatch', 
+        help='draw only directories with a name matching given value')
     args = parser.parse_args()
 
     if args.csv == '-':
@@ -324,9 +342,13 @@ def main():
         with open(args.csv) as fp:
             root = read_data(fp)
 
+    filter_tree(root, minsize=args.minsize, pattern=args.fnmatch)
+
     node = findtop(root)
     kwargs = vars(args)
-    del(kwargs['csv'])
+    for k in ['csv', 'minsize', 'fnmatch']:
+        del(kwargs[k])
+
     polarchart(node, **kwargs)
     # dumptree(root)
 
