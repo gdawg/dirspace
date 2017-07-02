@@ -95,8 +95,13 @@ def read_data(it):
 
     for lineno,line in izip(count(), it):
         try:
-            fields = line[:-1].split(',')
-            nodepath,nstr = fields[:2]
+            # some directories have commas in the name *sigh*
+            # on the plus side, we only ever have 3 fields and
+            # the first is always the name
+
+            line = line[:line.rfind(',')] # ignore the human size
+            idx = line.rindex(',')
+            nodepath,nstr = line[:idx],line[idx+1:]
         except ValueError, e:
             sys.stderr.write('line {}: {}\n'.format(lineno, e))
         n = int(nstr)
@@ -198,11 +203,7 @@ class PolarSizeChart(object):
                 continue
 
             if self.color_by_size:
-                # calculate range from 0-1
-                pos = 1.0 - w / np.pi
-                # shift it up to avoid black
-                hpos = 0.5 * pos + 0.5
-                bar.set_color(self.cmap(hpos))
+                bar.set_color(self.barcolor(w))
 
             fcolor = np.array(bar.get_facecolor())
             ecolor = self.darken_color(fcolor)
@@ -228,6 +229,19 @@ class PolarSizeChart(object):
         cx = barpos[0] + 0.5 * width
         cy = barpos[1] + 0.5 * height
         return cx,cy
+
+    def barcolor(self, w):
+        norm_w = 1.0 - w / (2.0 * np.pi)
+
+        if self.cmap == mplcm.gray:
+            # avoid black, it's too hard to make out
+            # differences between slices if used
+            low = 0.6
+            pos = low + (1.0 - low) * norm_w
+        else:
+            pos = norm_w
+
+        return self.cmap(pos)
 
     def darken_color(self, color, amt=0.25):
         assert(amt >= 0)
@@ -384,8 +398,10 @@ def main():
         with open(args.csv) as fp:
             root = read_data(fp)
 
+    # extract minsize and divide to account for data sizes being in kb
+    minsize = None if args.minsize == None else args.minsize / 1024
     filter_tree(root, 
-                minsize=args.minsize/1024, # node sizes are in kb
+                minsize=minsize,
                 pattern=args.fnmatch)
 
     node = findtop(root)

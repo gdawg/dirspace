@@ -47,6 +47,7 @@ def nlargest_paths(csvpath, n=10):
         unsorted_sp = heappop_depth(heap, depth + 1)
         subpaths = nlargest(n - len(top), unsorted_sp)
         top += subpaths
+        depth += 1
 
     return top
 

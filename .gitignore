@@ -40,3 +40,5 @@ dirspace
 
 localvars.mk
 localrules.mk
+local
+*.local*
