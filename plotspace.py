@@ -10,12 +10,18 @@ import csv
 from os.path import relpath
 from heapq import heappush, heappop, nlargest
 
+from itertools import ifilter
+
 def heappop_depth(heap, depth):
     found = []
     while len(heap) > 0 and heap[0][0] == depth:
         _,rec = heappop(heap)
         found.append(rec)
     return found
+
+def rowfilter(row):
+    """Filter for csv rows to strip invalid results"""
+    return len(row) == 3
 
 
 def nlargest_paths(csvpath, n=10):
@@ -31,6 +37,7 @@ def nlargest_paths(csvpath, n=10):
     heap = []
     with open(csvpath) as fp:
         reader = csv.reader(fp)
+        reader = ifilter(rowfilter, reader)
 
         for path,sizestr,_ in reader:
             size = int(sizestr)
